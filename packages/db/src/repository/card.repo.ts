@@ -82,27 +82,38 @@ export const create = async (
       `);
     }
 
-    const result = await tx
-      .insert(cards)
-      .values({
-        publicId: generateUID(),
-        title: cardInput.title,
-        description: cardInput.description,
-        createdBy: cardInput.createdBy,
-        listId: cardInput.listId,
-        index: index,
-        dueDate: cardInput.dueDate ?? null,
-      })
-      .returning({ id: cards.id, listId: cards.listId, publicId: cards.publicId });
+    let result: { id: number; listId: number; publicId: string }[] | undefined;
+    try {
+      result = await tx
+        .insert(cards)
+        .values({
+          publicId: generateUID(),
+          title: cardInput.title,
+          description: cardInput.description,
+          createdBy: cardInput.createdBy,
+          listId: cardInput.listId,
+          index: index,
+          dueDate: cardInput.dueDate ?? null,
+        })
+        .returning({ id: cards.id, listId: cards.listId, publicId: cards.publicId });
+    } catch (err) {
+      console.error("[card.create] INSERT card failed:", err);
+      throw err;
+    }
 
     if (!result[0]) throw new Error("Unable to create card");
 
-    await tx.insert(cardActivities).values({
-      publicId: generateUID(),
-      cardId: result[0].id,
-      type: "card.created",
-      createdBy: cardInput.createdBy,
-    });
+    try {
+      await tx.insert(cardActivities).values({
+        publicId: generateUID(),
+        cardId: result[0].id,
+        type: "card.created",
+        createdBy: cardInput.createdBy,
+      });
+    } catch (err) {
+      console.error("[card.create] INSERT card_activity failed:", err);
+      throw err;
+    }
 
     const countExpr = sql<number>`COUNT(*)`.mapWith(Number);
 
